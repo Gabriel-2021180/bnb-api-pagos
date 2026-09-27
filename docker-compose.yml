@@ -1,0 +1,145 @@
+name: apipagos
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: apipagos-api:latest
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      Swagger__Enabled: ${SWAGGER_ENABLED:-true}
+      Database__Provider: ${DB_PROVIDER:-PostgreSql}
+      Database__Host: ${DB_HOST:-postgres}
+      Database__Port: ${DB_PORT:-5432}
+      Database__Name: ${DB_NAME:-apipagos}
+      Database__Username: ${APP_DB_USER:-apipagos_app}
+      Database__Password: ${APP_DB_PASSWORD:?Defina APP_DB_PASSWORD en .env}
+      Kafka__Enabled: ${KAFKA_ENABLED:-false}
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__Topic: ${KAFKA_TOPIC:-payments.registered}
+      Security__ApiKeys__0__Name: ${API_KEY_NAME:-default-client}
+      Security__ApiKeys__0__Key: ${API_KEY:?Defina API_KEY en .env}
+      Security__Jwt__SigningKey: ${JWT_SIGNING_KEY:?Defina JWT_SIGNING_KEY en .env}
+      Security__Jwt__Clients__0__ClientId: ${JWT_CLIENT_ID:-default-client}
+      Security__Jwt__Clients__0__ClientSecret: ${JWT_CLIENT_SECRET:?Defina JWT_CLIENT_SECRET en .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      sqlserver-init:
+        condition: service_completed_successfully
+        required: false
+      kafka:
+        condition: service_healthy
+        required: false
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: ${DB_NAME:-apipagos}
+      POSTGRES_USER: ${POSTGRES_OWNER_USER:-apipagos_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?Defina POSTGRES_OWNER_PASSWORD en .env}
+      APP_DB_USER: ${APP_DB_USER:-apipagos_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Defina APP_DB_PASSWORD en .env}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Por TCP: el servidor temporal de inicialización solo escucha por socket local.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    profiles: [sqlserver]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Defina MSSQL_SA_PASSWORD en .env}
+    ports:
+      - "${SQLSERVER_HOST_PORT:-1433}:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -b -Q \"SELECT 1\" > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  # Crea base de datos, tablas, procedimientos y usuario de la app; termina al acabar.
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    profiles: [sqlserver]
+    entrypoint: ["/bin/bash", "/init/init.sh"]
+    environment:
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_NAME: ${DB_NAME:-apipagos}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Defina MSSQL_SA_PASSWORD en .env}
+      APP_DB_USER: ${APP_DB_USER:-apipagos_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Defina APP_DB_PASSWORD en .env}
+    volumes:
+      - ./database/sqlserver:/init:ro
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: "no"
+
+  kafka:
+    # Imagen nativa (GraalVM): ~185 MB frente a ~594 MB de la versión JVM y arranca en segundos.
+    image: apache/kafka-native:3.8.0
+    profiles: [kafka]
+    ports:
+      - "${KAFKA_HOST_PORT:-9094}:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:${KAFKA_HOST_PORT:-9094}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  # Herramienta opcional para ver los eventos publicados (ver README).
+  kcat:
+    image: edenhill/kcat:1.7.1
+    profiles: [tools]
+    command: ["-b", "kafka:9092", "-t", "payments.registered", "-C", "-J", "-e", "-q"]
+
+volumes:
+  postgres-data:
+  sqlserver-data:

@@ -1,0 +1,32 @@
+Estamos trabajando en una solución interna para registrar pagos de servicios básicos (agua, electricidad, telecomunicaciones) de nuestros clientes. Tu tarea será construir una API básica que permita registrar y consultar pagos realizados.
+Stack Tecnológico.
+.NET 8   
+Base de datos relacional   
+Docker (opcional)  
+Kafka (opcional) 
+Requisitos Técnicos
+Endpoint para registrar un pago:
+POST /api/payments con el siguiente JSON:
+{
+  "customerId": "cfe8b150-2f84-4a1a-bdf4-923b20e34973",
+  "serviceProvider": "SERVICIOS ELÉCTRICOS S.A.",
+  "amount": 120.50
+}
+El sistema debe guardar el registro en base de datos.   Estado inicial: pendiente.   Rechazar montos > 1500 Bs.   Rechazar montos en dólares.   2. Endpoint para consultar pagos
+
+GET /api/payments?customerId=... devuelve:
+
+[
+  {
+    "paymentId": "a248ad43-1f44-4b32-b0a0-e1c725b9bb7d",
+    "serviceProvider": "SERVICIOS ELÉCTRICOS S.A.",
+    "amount": 120.50,
+    "status": "pendiente",
+    "createdAt": "2025-07-17T08:30:00Z"
+  }
+]
+Consideraciones:   Buenas prácticas valoradas: servicios, DTOs, validaciones, errores.   
+Documentación esperada
+README.md con instrucciones.   
+Dockerfile (opcional).   
+Swagger (opcional).  

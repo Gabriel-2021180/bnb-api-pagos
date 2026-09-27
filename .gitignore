@@ -1,0 +1,46 @@
+# Compilación .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+publish/
+*.nupkg
+TestResults/
+coverage*/
+*.coverage
+*.trx
+
+# IDEs y editores
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.swp
+*~
+
+# Herramientas de asistentes de código
+.claude/
+CLAUDE.md
+.cursor/
+.copilot/
+
+# Secretos y configuración local (usar .env.example como plantilla)
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+secrets*.json
+*.pfx
+*.pem
+*.key
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos generados
+*.log
+*.zip

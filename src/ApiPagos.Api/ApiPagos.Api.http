@@ -1,0 +1,43 @@
+@host = http://localhost:5067
+@apiKey = dev-api-key-cambiar-en-produccion
+@customerId = cfe8b150-2f84-4a1a-bdf4-923b20e34973
+
+### Registrar pago
+POST {{host}}/api/payments
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "customerId": "{{customerId}}",
+  "serviceProvider": "SERVICIOS ELÉCTRICOS S.A.",
+  "amount": 120.50,
+  "currency": "BOB"
+}
+
+### Pago rechazado (USD)
+POST {{host}}/api/payments
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "customerId": "{{customerId}}",
+  "serviceProvider": "SERVICIOS ELÉCTRICOS S.A.",
+  "amount": 50,
+  "currency": "USD"
+}
+
+### Consultar pagos del cliente
+GET {{host}}/api/payments?customerId={{customerId}}
+X-Api-Key: {{apiKey}}
+
+### Obtener JWT
+POST {{host}}/api/auth/token
+Content-Type: application/json
+
+{
+  "clientId": "dev-client",
+  "clientSecret": "dev-client-secret-cambiar"
+}
+
+### Health checks
+GET {{host}}/health/ready
